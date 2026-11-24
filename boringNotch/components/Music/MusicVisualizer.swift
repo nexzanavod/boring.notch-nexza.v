@@ -118,6 +118,53 @@ struct AudioSpectrumView: NSViewRepresentable {
     }
 }
 
+// MARK: - Electric Accent
+
+/// A small thunder/electricity symbol that randomly flashes over the spectrum bars.
+/// Uses an async loop that sleeps between flashes (no per-frame timer), so it costs
+/// effectively nothing while idle and fully stops when paused or off-screen.
+struct ElectricAccentView: View {
+    let isPlaying: Bool
+
+    @State private var showBolt = false
+    @State private var symbol = "bolt.fill"
+    @State private var flashTask: Task<Void, Never>?
+
+    private let symbols = ["bolt.fill", "bolt", "sparkles"]
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 9, weight: .bold))
+            .foregroundStyle(.yellow)
+            .shadow(color: .yellow.opacity(0.9), radius: 2)
+            .scaleEffect(showBolt ? 1 : 0.3)
+            .opacity(showBolt ? 1 : 0)
+            .allowsHitTesting(false)
+            .onAppear { start() }
+            .onDisappear { flashTask?.cancel() }
+            .onChange(of: isPlaying) { _, playing in
+                playing ? start() : flashTask?.cancel()
+            }
+    }
+
+    private func start() {
+        flashTask?.cancel()
+        guard isPlaying else { return }
+        flashTask = Task { @MainActor in
+            while !Task.isCancelled {
+                // Rare, randomized gap between flashes keeps it subtle and cheap.
+                try? await Task.sleep(for: .seconds(Double.random(in: 3...7)))
+                guard !Task.isCancelled, isPlaying else { continue }
+
+                symbol = symbols.randomElement() ?? "bolt.fill"
+                withAnimation(.easeOut(duration: 0.15)) { showBolt = true }
+                try? await Task.sleep(for: .seconds(0.35))
+                withAnimation(.easeIn(duration: 0.3)) { showBolt = false }
+            }
+        }
+    }
+}
+
 #Preview {
     AudioSpectrumView(isPlaying: .constant(true))
         .frame(width: 16, height: 20)

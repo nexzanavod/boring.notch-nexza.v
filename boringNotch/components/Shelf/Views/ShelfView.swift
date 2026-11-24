@@ -70,11 +70,33 @@ struct ShelfView: View {
                 content
                     .padding()
             }
+            .overlay(alignment: .topTrailing) {
+                if !tvm.isEmpty {
+                    removeAllButton
+                        .padding(8)
+                }
+            }
             .transaction { transaction in
                 transaction.animation = vm.animation
             }
             .contentShape(Rectangle())
             .onTapGesture { selection.clear() }
+    }
+
+    var removeAllButton: some View {
+        Button {
+            selection.clear()
+            tvm.removeAll()
+        } label: {
+            Image(systemName: "trash")
+                .symbolVariant(.fill)
+                .imageScale(.medium)
+                .foregroundStyle(.white, .gray)
+                .padding(6)
+                .background(Color.black.opacity(0.35), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help("Remove all items")
     }
 
     var content: some View {

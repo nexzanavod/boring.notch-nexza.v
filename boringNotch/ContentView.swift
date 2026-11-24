@@ -462,6 +462,9 @@ struct ContentView: View {
                             AudioSpectrumView(isPlaying: $musicManager.isPlaying)
                                 .frame(width: 16, height: 12)
                         }
+                        .overlay {
+                            ElectricAccentView(isPlaying: musicManager.isPlaying)
+                        }
                 } else {
                     LottieAnimationContainer()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)

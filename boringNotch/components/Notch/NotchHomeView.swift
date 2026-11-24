@@ -139,10 +139,21 @@ struct MusicControlsView: View {
     }
 
     private func songInfo(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            MarqueeText(
-                $musicManager.songTitle, font: .headline, nsFont: .headline, textColor: .white,
-                frameWidth: width)
+        // Reserve room for the bouncing bars (when playing) and the shuffle button
+        let reserved: CGFloat = (musicManager.isPlaying ? 22 : 0) + 24
+        let titleWidth = max(width - reserved, 0)
+
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                if musicManager.isPlaying {
+                    SoundBars(isPlaying: musicManager.isPlaying)
+                }
+                MarqueeText(
+                    $musicManager.songTitle, font: .headline, nsFont: .headline, textColor: .white,
+                    frameWidth: titleWidth)
+                Spacer(minLength: 0)
+                shuffleButton
+            }
             MarqueeText(
                 $musicManager.artistName,
                 font: .headline,
@@ -187,6 +198,22 @@ struct MusicControlsView: View {
                 }
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            musicManager.openMusicApp()
+        }
+    }
+
+    private var shuffleButton: some View {
+        Button {
+            MusicManager.shared.toggleShuffle()
+        } label: {
+            Image(systemName: "shuffle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(musicManager.isShuffled ? Color.red : .gray)
+        }
+        .buttonStyle(.plain)
+        .help("Shuffle")
     }
 
     private var musicSlider: some View {
@@ -325,6 +352,38 @@ private extension Array where Element == MusicControlButton {
     }
 }
 
+// MARK: - Sound Bars Visualizer
+
+struct SoundBars: View {
+    let isPlaying: Bool
+    @State private var animating = false
+
+    // Distinct resting/peak heights so the bars look lively, not uniform
+    private let peaks: [CGFloat] = [8, 14, 6, 11]
+    private let minHeight: CGFloat = 3
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2) {
+            ForEach(peaks.indices, id: \.self) { index in
+                Capsule()
+                    .fill(Color.white.opacity(0.9))
+                    .frame(width: 2.5, height: animating ? peaks[index] : minHeight)
+                    .animation(
+                        isPlaying
+                            ? .easeInOut(duration: 0.4 + Double(index) * 0.1).repeatForever(autoreverses: true)
+                            : .easeOut(duration: 0.2),
+                        value: animating
+                    )
+            }
+        }
+        .frame(width: 16, height: 14)
+        .onAppear { animating = isPlaying }
+        .onChange(of: isPlaying) { _, playing in
+            animating = playing
+        }
+    }
+}
+
 // MARK: - Volume Control View
 
 struct VolumeControlView: View {
@@ -416,6 +475,68 @@ struct VolumeControlView: View {
     }
 }
 
+// MARK: - World Clock
+
+struct WorldClockView: View {
+    private struct Zone: Identifiable {
+        let label: String
+        let flag: String
+        let identifier: String
+        var id: String { identifier }
+    }
+
+    private let zones: [Zone] = [
+        Zone(label: "Helsinki", flag: "🇫🇮", identifier: "Europe/Helsinki"),
+        Zone(label: "Brisbane", flag: "🇦🇺", identifier: "Australia/Brisbane")
+    ]
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            VStack(spacing: 8) {
+                ForEach(zones) { zone in
+                    clockCard(for: zone, date: context.date)
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
+    }
+
+    private func clockCard(for zone: Zone, date: Date) -> some View {
+        HStack(spacing: 8) {
+            Text(zone.flag)
+                .font(.system(size: 18))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(zone.label)
+                    .font(.system(.caption2, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(.gray)
+                Text(timeString(for: date, identifier: zone.identifier))
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .monospacedDigit()
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white.opacity(0.08))
+        )
+    }
+
+    private func timeString(for date: Date, identifier: String) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: identifier)
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
 // MARK: - Main View
 
 struct NotchHomeView: View {
@@ -460,6 +581,10 @@ struct NotchHomeView: View {
                     .blur(radius: vm.notchState == .closed ? 20 : 0)
                     .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.76, blendDuration: 0), value: shouldShowCamera)
             }
+
+            WorldClockView()
+                .frame(width: 130)
+                .transition(.opacity)
         }
         .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .top)), removal: .opacity))
         .blur(radius: vm.notchState == .closed ? 30 : 0)
